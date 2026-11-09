@@ -34,11 +34,71 @@ const B = "0x2222222222222222222222222222222222222222";
 const T0 = 1_790_000_000_000;
 
 const inputs: Input[] = [
-  { payer: A, provider: "prv_alpha", model: "model-a", prompt: null, completion: null, tokens: 192, pricePer1k: 1800, discountBps: 0, priority: 0, stakersLive: false, createdAt: T0 },
-  { payer: A, provider: "prv_alpha", model: "model-a", prompt: 820, completion: 410, tokens: 1230, pricePer1k: 1800, discountBps: P.tier1_discount_bps, priority: 0, stakersLive: true, createdAt: T0 + 61_000 },
-  { payer: B, provider: "prv_beta", model: "model-b", prompt: 2048, completion: 1024, tokens: 3072, pricePer1k: 950, discountBps: P.tier2_discount_bps, priority: 1, stakersLive: true, createdAt: T0 + 3_599_999 },
-  { payer: B, provider: "prv_beta", model: "model-b", prompt: 15, completion: 0, tokens: 15, pricePer1k: 950, discountBps: P.tier3_discount_bps, priority: 1, stakersLive: true, createdAt: T0 + 3_600_500 },
-  { payer: A, provider: "prv_gamma", model: "model-c", prompt: 4000, completion: 6000, tokens: 10_000, pricePer1k: 3333, discountBps: 0, priority: 0, stakersLive: true, createdAt: T0 + 7_300_000 },
+  {
+    payer: A,
+    provider: "prv_alpha",
+    model: "model-a",
+    prompt: null,
+    completion: null,
+    tokens: 192,
+    pricePer1k: 1800,
+    discountBps: 0,
+    priority: 0,
+    stakersLive: false,
+    createdAt: T0,
+  },
+  {
+    payer: A,
+    provider: "prv_alpha",
+    model: "model-a",
+    prompt: 820,
+    completion: 410,
+    tokens: 1230,
+    pricePer1k: 1800,
+    discountBps: P.tier1_discount_bps,
+    priority: 0,
+    stakersLive: true,
+    createdAt: T0 + 61_000,
+  },
+  {
+    payer: B,
+    provider: "prv_beta",
+    model: "model-b",
+    prompt: 2048,
+    completion: 1024,
+    tokens: 3072,
+    pricePer1k: 950,
+    discountBps: P.tier2_discount_bps,
+    priority: 1,
+    stakersLive: true,
+    createdAt: T0 + 3_599_999,
+  },
+  {
+    payer: B,
+    provider: "prv_beta",
+    model: "model-b",
+    prompt: 15,
+    completion: 0,
+    tokens: 15,
+    pricePer1k: 950,
+    discountBps: P.tier3_discount_bps,
+    priority: 1,
+    stakersLive: true,
+    createdAt: T0 + 3_600_500,
+  },
+  {
+    payer: A,
+    provider: "prv_gamma",
+    model: "model-c",
+    prompt: 4000,
+    completion: 6000,
+    tokens: 10_000,
+    pricePer1k: 3333,
+    discountBps: 0,
+    priority: 0,
+    stakersLive: true,
+    createdAt: T0 + 7_300_000,
+  },
 ];
 
 /** quote() + the staker fallback from settlement, as written in SPEC section 6. */
@@ -50,7 +110,14 @@ function split(i: Input) {
   const sponsor = Math.floor((fee * P.sponsor_share_bps) / 10_000);
   const treasury = fee - stakers - sponsor;
   const toStakers = i.stakersLive ? stakers : 0;
-  return { base, discount, fee, to_stakers: toStakers, to_sponsor: sponsor, to_treasury: treasury + (stakers - toStakers) };
+  return {
+    base,
+    discount,
+    fee,
+    to_stakers: toStakers,
+    to_sponsor: sponsor,
+    to_treasury: treasury + (stakers - toStakers),
+  };
 }
 
 export async function buildChain(genesis = DEFAULT_GENESIS): Promise<ChainDump> {

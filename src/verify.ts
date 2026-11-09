@@ -30,7 +30,8 @@ export function shapeProblem(r: unknown): string | null {
  * Never trusts a record's `hash` column for anything but the comparison.
  */
 export async function verifyChain(genesis: string, records: readonly SettlementRecord[]): Promise<VerifyResult> {
-  if (typeof genesis !== "string" || !HEX64.test(genesis)) throw new Error("genesis must be 64 lowercase hex characters");
+  if (typeof genesis !== "string" || !HEX64.test(genesis))
+    throw new Error("genesis must be 64 lowercase hex characters");
   let prev = genesis;
   let prevSeq = -Infinity;
   let checked = 0;

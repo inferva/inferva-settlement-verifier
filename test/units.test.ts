@@ -73,7 +73,10 @@ describe("verifyChain", () => {
   it("does not trust the stored hash: a rewritten hash breaks the next link", async () => {
     const { genesis, records } = await buildChain();
     records[1]!.hash = "f".repeat(64);
-    expect((await verifyChain(genesis, records)).broken).toEqual({ seq: 2, reason: "hash does not match its contents" });
+    expect((await verifyChain(genesis, records)).broken).toEqual({
+      seq: 2,
+      reason: "hash does not match its contents",
+    });
   });
 });
 

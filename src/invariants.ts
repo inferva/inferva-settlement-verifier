@@ -64,7 +64,8 @@ export function checkRecordWithParams(r: SettlementRecord, p: FeeParams): Violat
   const sponsor = floorDiv(r.fee * p.sponsor_share_bps, BPS);
   if (r.to_sponsor !== sponsor) warn("P2", `to_sponsor ${r.to_sponsor}, expected ${sponsor}`);
   const stakers = floorDiv(r.fee * p.staker_share_bps, BPS);
-  if (r.to_stakers !== stakers && r.to_stakers !== 0) warn("P3", `to_stakers ${r.to_stakers}, expected ${stakers} or 0`);
+  if (r.to_stakers !== stakers && r.to_stakers !== 0)
+    warn("P3", `to_stakers ${r.to_stakers}, expected ${stakers} or 0`);
   const tiers = r.priority === 1 ? [p.tier2_discount_bps, p.tier3_discount_bps] : [0, p.tier1_discount_bps];
   const allowed = [...new Set(tiers.map((bps) => floorDiv(r.base * bps, BPS)))];
   if (!allowed.includes(r.discount)) {

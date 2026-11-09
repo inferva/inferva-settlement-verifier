@@ -32,12 +32,17 @@ export async function fetchChain(baseUrl = DEFAULT_BASE_URL, opts: FetchOptions 
   const records: SettlementRecord[] = [];
   let after = 0;
   for (;;) {
-    const page = (await getJson(f, `${trim(baseUrl)}/api/chain?after=${after}&limit=${pageSize}`)) as Partial<ChainDump>;
-    if (typeof page?.genesis !== "string" || !Array.isArray(page.records)) throw new Error("unexpected /api/chain response");
+    const page = (await getJson(
+      f,
+      `${trim(baseUrl)}/api/chain?after=${after}&limit=${pageSize}`,
+    )) as Partial<ChainDump>;
+    if (typeof page?.genesis !== "string" || !Array.isArray(page.records))
+      throw new Error("unexpected /api/chain response");
     if (genesis === undefined) genesis = page.genesis;
     else if (page.genesis !== genesis) throw new Error("genesis changed between pages");
     for (const r of page.records) {
-      if (!(Number.isSafeInteger(r?.seq) && r.seq > after)) throw new Error(`page after=${after} returned seq ${String(r?.seq)}`);
+      if (!(Number.isSafeInteger(r?.seq) && r.seq > after))
+        throw new Error(`page after=${after} returned seq ${String(r?.seq)}`);
       records.push(r);
       after = r.seq;
     }
@@ -47,7 +52,10 @@ export async function fetchChain(baseUrl = DEFAULT_BASE_URL, opts: FetchOptions 
 }
 
 /** Current parameters from `GET /api/params`. Only meaningful for records settled under them. */
-export async function fetchParams(baseUrl = DEFAULT_BASE_URL, opts: Pick<FetchOptions, "fetch"> = {}): Promise<FeeParams> {
+export async function fetchParams(
+  baseUrl = DEFAULT_BASE_URL,
+  opts: Pick<FetchOptions, "fetch"> = {},
+): Promise<FeeParams> {
   const f = opts.fetch ?? (globalThis.fetch as unknown as FetchLike);
   const body = (await getJson(f, `${trim(baseUrl)}/api/params`)) as { params?: Record<string, unknown> };
   const p = body?.params ?? {};

@@ -27,7 +27,17 @@ export interface SettlementRecord {
 /** The fields that go into a record's hash, in SPEC order (after `prev_hash`). */
 export type HashedFields = Pick<
   SettlementRecord,
-  "id" | "payer" | "provider" | "model" | "tokens" | "base" | "discount" | "fee" | "capacity_id" | "epoch" | "created_at"
+  | "id"
+  | "payer"
+  | "provider"
+  | "model"
+  | "tokens"
+  | "base"
+  | "discount"
+  | "fee"
+  | "capacity_id"
+  | "epoch"
+  | "created_at"
 >;
 
 /** A whole chain: the genesis value plus every record in `seq` order. Also the dump file format. */

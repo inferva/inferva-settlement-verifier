@@ -46,7 +46,9 @@ describe("golden vectors", () => {
     }
   });
 
-  const chainFiles = readdirSync(dir).filter((f) => f.endsWith(".json") && f !== "payload.json" && f !== "live-seq1.json");
+  const chainFiles = readdirSync(dir).filter(
+    (f) => f.endsWith(".json") && f !== "payload.json" && f !== "live-seq1.json",
+  );
 
   for (const file of chainFiles) {
     it(`${file} matches its expected result`, async () => {
@@ -66,9 +68,15 @@ describe("golden vectors", () => {
 
   it("the expected break kinds are covered", () => {
     expect(load("tampered-field.json").expect.broken).toEqual({ seq: 3, reason: "hash does not match its contents" });
-    expect(load("dropped-record.json").expect.broken).toEqual({ seq: 4, reason: "does not point at the previous record" });
+    expect(load("dropped-record.json").expect.broken).toEqual({
+      seq: 4,
+      reason: "does not point at the previous record",
+    });
     expect(load("reordered.json").expect.broken).toEqual({ seq: 4, reason: "does not point at the previous record" });
-    expect(load("wrong-genesis.json").expect.broken).toEqual({ seq: 1, reason: "does not point at the previous record" });
+    expect(load("wrong-genesis.json").expect.broken).toEqual({
+      seq: 1,
+      reason: "does not point at the previous record",
+    });
     expect(load("tampered-split.json").expect.broken).toBeNull();
     expect(load("tampered-split.json").expect.errors).toEqual([{ seq: 3, code: "I2" }]);
   });
