@@ -1,0 +1,32 @@
+{
+  "name": "live-seq1",
+  "description": "The first record of the live settlement log, as served by GET https://dapp.inferva.xyz/api/chain?after=0&limit=1 on 2026-11-09. Its hash was computed by the app, not by this package.",
+  "genesis": "0000000000000000000000000000000000000000000000000000000000000000",
+  "records": [
+    {
+      "seq": 1,
+      "id": "req_b3554939b912de693875",
+      "key_id": "key_bf7aa682ac98",
+      "payer": "0xc8164417c6a05a9bae75c26faca83a97bcc39e34",
+      "provider": "prv_basalt",
+      "model": "basalt-70b",
+      "tokens": 192,
+      "base": 346,
+      "discount": 0,
+      "fee": 35,
+      "to_stakers": 0,
+      "to_sponsor": 14,
+      "to_treasury": 21,
+      "capacity_id": "cap_3cf3b9fd84ba",
+      "priority": 0,
+      "epoch": 498374,
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "hash": "47eaac5d4a736c64788462012ef0554f9d7fb55a7561381d969d2ec0d6347dd4",
+      "created_at": 1794147157318,
+      "prompt_tokens": null,
+      "completion_tokens": null,
+      "latency_ms": null,
+      "stream": 0
+    }
+  ]
+}
