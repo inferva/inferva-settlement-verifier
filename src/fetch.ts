@@ -1,4 +1,4 @@
-import type { ChainDump, FeeParams, SettlementRecord } from "./types.js";
+import type { ChainDump, FeeParams, LegacyFeeParams, SettlementRecord } from "./types.js";
 
 export const DEFAULT_BASE_URL = "https://dapp.inferva.xyz";
 /** The server clamps `limit` to 1..200. */
@@ -59,19 +59,20 @@ export async function fetchParams(
   const f = opts.fetch ?? (globalThis.fetch as unknown as FetchLike);
   const body = (await getJson(f, `${trim(baseUrl)}/api/params`)) as { params?: Record<string, unknown> };
   const p = body?.params ?? {};
-  const keys = [
-    "fee_bps",
-    "staker_share_bps",
-    "sponsor_share_bps",
-    "epoch_seconds",
-    "tier1_discount_bps",
-    "tier2_discount_bps",
-    "tier3_discount_bps",
-  ] as const;
-  const out = {} as FeeParams;
-  for (const k of keys) {
+  const int = (k: string) => {
     if (!Number.isSafeInteger(p[k])) throw new Error(`/api/params is missing ${k}`);
-    out[k] = p[k] as number;
+    return p[k] as number;
+  };
+  const out: FeeParams = {
+    fee_bps: int("fee_bps"),
+    sponsor_share_bps: int("sponsor_share_bps"),
+    epoch_seconds: int("epoch_seconds"),
+  };
+  // Parameter sets from before the fee schedule was simplified also carry these; keep them so records
+  // settled under that schedule are checked against it.
+  const legacyKeys = ["staker_share_bps", "tier1_discount_bps", "tier2_discount_bps", "tier3_discount_bps"] as const;
+  if (legacyKeys.every((k) => Number.isSafeInteger(p[k]))) {
+    out.legacy = Object.fromEntries(legacyKeys.map((k) => [k, p[k] as number])) as unknown as LegacyFeeParams;
   }
   return out;
 }

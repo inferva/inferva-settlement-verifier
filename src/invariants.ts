@@ -27,6 +27,7 @@ export function checkRecord(r: SettlementRecord): Violation[] {
   for (const k of ["epoch", "created_at"] as const) {
     if (!isInt(r[k]) || r[k] < 0) err("I1", `${k} must be a non-negative integer, got ${String(r[k])}`);
   }
+  // to_stakers is a legacy column (0 on current records); it stays in the sum so older records still balance.
   if (amountsOk && r.to_stakers + r.to_sponsor + r.to_treasury !== r.fee) {
     err("I2", `to_stakers + to_sponsor + to_treasury = ${r.to_stakers + r.to_sponsor + r.to_treasury}, fee = ${r.fee}`);
   }
@@ -52,7 +53,7 @@ const floorDiv = (a: number, b: number) => Math.floor(a / b);
 /**
  * Exact fee math for one parameter set (SPEC section 6.3). Parameters are governable and are not
  * recorded per record, so a mismatch only means "not settled under these parameters".
- * Reported as warnings.
+ * Reported as warnings. With `p.legacy`, P3 and P4 follow the retired fee schedule (SPEC section 6.4).
  */
 export function checkRecordWithParams(r: SettlementRecord, p: FeeParams): Violation[] {
   const out: Violation[] = [];
@@ -63,13 +64,27 @@ export function checkRecordWithParams(r: SettlementRecord, p: FeeParams): Violat
   if (r.fee !== fee) warn("P1", `fee ${r.fee}, expected ceil(base * fee_bps / 10000) = ${fee}`);
   const sponsor = floorDiv(r.fee * p.sponsor_share_bps, BPS);
   if (r.to_sponsor !== sponsor) warn("P2", `to_sponsor ${r.to_sponsor}, expected ${sponsor}`);
-  const stakers = floorDiv(r.fee * p.staker_share_bps, BPS);
-  if (r.to_stakers !== stakers && r.to_stakers !== 0)
-    warn("P3", `to_stakers ${r.to_stakers}, expected ${stakers} or 0`);
-  const tiers = r.priority === 1 ? [p.tier2_discount_bps, p.tier3_discount_bps] : [0, p.tier1_discount_bps];
-  const allowed = [...new Set(tiers.map((bps) => floorDiv(r.base * bps, BPS)))];
-  if (!allowed.includes(r.discount)) {
-    warn("P4", `discount ${r.discount} matches no tier for priority ${r.priority} (allowed ${allowed.join(", ")})`);
+
+  const legacy = p.legacy;
+  if (legacy) {
+    const share = floorDiv(r.fee * legacy.staker_share_bps, BPS);
+    if (r.to_stakers !== share && r.to_stakers !== 0)
+      warn("P3", `to_stakers ${r.to_stakers}, expected ${share} or 0 under the legacy parameters`);
+    const bps =
+      r.priority === 1 ? [legacy.tier2_discount_bps, legacy.tier3_discount_bps] : [0, legacy.tier1_discount_bps];
+    const allowed = [...new Set(bps.map((d) => floorDiv(r.base * d, BPS)))];
+    if (!allowed.includes(r.discount)) {
+      warn(
+        "P4",
+        `discount ${r.discount} is not allowed for priority ${r.priority} under the legacy parameters (allowed ${allowed.join(", ")})`,
+      );
+    }
+  } else {
+    if (r.to_stakers !== 0)
+      warn("P3", `to_stakers ${r.to_stakers}, expected 0 (the treasury takes the whole remainder)`);
+    if (r.discount !== 0 || r.priority !== 0) {
+      warn("P4", `discount ${r.discount} and priority ${r.priority}, expected 0 and 0`);
+    }
   }
   if (isInt(r.created_at) && isInt(r.epoch)) {
     const epoch = Math.floor(r.created_at / 1000 / p.epoch_seconds);

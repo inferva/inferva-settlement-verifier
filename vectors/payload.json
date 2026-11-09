@@ -1,13 +1,22 @@
 {
   "description": "Canonical payload string and SHA-256 hex for every record of valid.json (SPEC sections 3 and 5).",
   "params": {
-    "fee_bps": 1000,
-    "staker_share_bps": 5000,
-    "sponsor_share_bps": 4000,
-    "epoch_seconds": 3600,
-    "tier1_discount_bps": 500,
-    "tier2_discount_bps": 1000,
-    "tier3_discount_bps": 2000
+    "1-5": {
+      "fee_bps": 1000,
+      "sponsor_share_bps": 4000,
+      "epoch_seconds": 3600,
+      "legacy": {
+        "staker_share_bps": 5000,
+        "tier1_discount_bps": 500,
+        "tier2_discount_bps": 1000,
+        "tier3_discount_bps": 2000
+      }
+    },
+    "6-7": {
+      "fee_bps": 1000,
+      "sponsor_share_bps": 8000,
+      "epoch_seconds": 3600
+    }
   },
   "cases": [
     {
@@ -39,6 +48,18 @@
       "prev_hash": "dcd102b88ce09e33794f58a0759f453ee23113bba4d60febc724cf81978f4cdd",
       "payload": "dcd102b88ce09e33794f58a0759f453ee23113bba4d60febc724cf81978f4cdd|req_00000000000000000005|0x1111111111111111111111111111111111111111|prv_gamma|model-c|10000|33330|0|3333|cap_000000000001|497224|1790007300000",
       "hash": "84a4269d10b6dcde09ec5d8bbfbfe8f292ff4f1ba6bd11305db59151278a2da5"
+    },
+    {
+      "seq": 6,
+      "prev_hash": "84a4269d10b6dcde09ec5d8bbfbfe8f292ff4f1ba6bd11305db59151278a2da5",
+      "payload": "84a4269d10b6dcde09ec5d8bbfbfe8f292ff4f1ba6bd11305db59151278a2da5|req_00000000000000000006|0x2222222222222222222222222222222222222222|prv_alpha|model-a|1000|1800|0|180|cap_000000000000|497225|1790010800000",
+      "hash": "87af6dd935ad94ef2736c2f024dc2f3ee75a1b93d9ebd378cc49836ef95c1866"
+    },
+    {
+      "seq": 7,
+      "prev_hash": "87af6dd935ad94ef2736c2f024dc2f3ee75a1b93d9ebd378cc49836ef95c1866",
+      "payload": "87af6dd935ad94ef2736c2f024dc2f3ee75a1b93d9ebd378cc49836ef95c1866|req_00000000000000000007|0x1111111111111111111111111111111111111111|prv_gamma|model-c|1801|6003|0|601|cap_000000000001|497225|1790010860250",
+      "hash": "06087524c90cffbb936f4d6f5dc56978e6d39a740fcb73bf51cc752b7aa8373d"
     }
   ]
 }

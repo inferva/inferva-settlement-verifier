@@ -3,7 +3,8 @@
 Specification and independent verifier for the [INFERVA](https://inferva.xyz) settlement log.
 
 Every request metered through INFERVA writes a settlement record: who paid, which provider and model, tokens,
-provider cost, discount, protocol fee, the fee split, the capacity position used, the epoch and a timestamp. Each
+provider cost, protocol fee, the fee split between the capacity sponsor and the treasury, the capacity position
+used, the epoch and a timestamp. Each
 record hashes the one before it, so the whole log is a single SHA-256 chain from a genesis value. This package lets
 anyone recompute that chain without trusting the app's own hash column or its in-browser check.
 
@@ -12,7 +13,8 @@ anyone recompute that chain without trusting the app's own hash column or its in
 - `verifyChain(genesis, records)`: zero runtime dependencies, WebCrypto, works in Node 18+ and browsers.
 - `inferva-verify`: a CLI that pages through the live log or a saved dump.
 - [`vectors/`](./vectors): golden vectors (valid chain, custom and wrong genesis, tampered field, tampered split,
-  dropped record, reordered records) plus the first live record as hashed by the app.
+  dropped record, reordered records) plus the first live record as hashed by the app. The valid chain mixes records
+  in the earlier record format (non-zero `discount`) with current ones, so both are covered.
 
 ## Quick start
 
@@ -20,7 +22,7 @@ anyone recompute that chain without trusting the app's own hash column or its in
 pnpm install
 pnpm build
 node dist/cli.js                       # verify the live log at https://dapp.inferva.xyz
-node dist/cli.js --params              # also check the exact fee math against the current parameters
+node dist/cli.js --params              # also check the exact fee math against the parameters the app serves now
 node dist/cli.js --save chain.json     # keep a copy, verify it again later with --file
 node dist/cli.js --file chain.json --json
 ```
@@ -28,9 +30,9 @@ node dist/cli.js --file chain.json --json
 ```
 source   https://dapp.inferva.xyz/api/chain
 genesis  0000000000000000000000000000000000000000000000000000000000000000
-records  1 (seq 1..1)
-checked  1
-tip      47eaac5d4a736c64788462012ef0554f9d7fb55a7561381d969d2ec0d6347dd4
+records  2 (seq 1..2)
+checked  2
+tip      cd6bb091ecaefe1a347c6922f1b2b58f81c20966d2e3c7fa3459caeb20ac84a1
 chain    OK
 errors   0
 warnings 0
@@ -65,7 +67,11 @@ hash = sha256_hex( prev_hash|id|payer|provider|model|tokens|base|discount|fee|ca
 ```
 
 `prev_hash` is the previous record's hash, or the genesis value (64 zeros on the live log) for the first record.
-Amounts are integers in micro USDC (1 USDC = 1,000,000). Full rules in [`SPEC.md`](./SPEC.md).
+Amounts are integers in micro USDG (1 USDG = 1,000,000). Full rules in [`SPEC.md`](./SPEC.md).
+
+`discount` is part of the hash, so it stays in the payload. It is 0 on current records; records written under the
+earlier fee schedule can carry a non-zero value and still verify exactly as before. The same goes for the unhashed
+legacy columns `to_stakers` and `priority`, which are 0 on current records.
 
 ## What it proves, and what it doesn't
 
@@ -77,11 +83,12 @@ It does not prove:
 
 - that the whole log was not rebuilt. Whoever runs the log could edit a record and recompute every hash after it,
   which changes the tip. Catching that needs a hash recorded somewhere else. Anchoring the tip onchain each epoch on
-  Elysium is planned, not live; until it ships, the outside reference is a tip or receipts you kept.
+  Robinhood Chain is planned, not live; until it ships, the outside reference is a tip or receipts you kept.
 - that the newest records, after the last hash you saved, were not dropped.
-- that the fee split (`to_stakers`, `to_sponsor`, `to_treasury`), `priority` or the token breakdown are untouched.
-  They are not in the hash. The verifier checks they are consistent (for example
-  `to_stakers + to_sponsor + to_treasury = fee`), which is not the same as tamper evidence.
+- that the fee split (`to_sponsor`, `to_treasury`, and the legacy `to_stakers`), `priority` or the token breakdown
+  are untouched. They are not in the hash. The verifier checks they are consistent (for example
+  `to_stakers + to_sponsor + to_treasury = fee`, with `to_stakers` 0 on current records), which is not the same as
+  tamper evidence.
 - that prices were fair, that a provider served what was billed, or that balances match the log.
 
 ## Invariants
@@ -90,9 +97,11 @@ Errors (hold for every record): non-negative integer amounts (I1), the fee split
 `priority` is 0 or 1 (I3), prompt plus completion tokens equal `tokens` when both are present (I4).
 
 Warnings: limits that follow from the v1 governance bounds (B1 to B3), and, with `--params`, the exact rounding of
-the fee, shares, discount and epoch under the current parameters (P1 to P5). Parameters are governable and not
-stored per record, so a P warning on an older record can mean the parameters changed. See [`SPEC.md`](./SPEC.md)
-section 6.
+the fee and epoch under the parameters the app serves now (P1 to P5): `to_sponsor = floor(fee * sponsor_share_bps /
+10000)`, the treasury takes the remainder, and `discount`, `to_stakers` and `priority` are 0. If the served
+parameters still include the earlier fee schedule's parameters, records settled under it are checked against them
+instead (SPEC section 6.4). Parameters are governable and not stored per record, so a P warning on an older record
+can mean the parameters changed. See [`SPEC.md`](./SPEC.md) section 6.
 
 ## Development
 

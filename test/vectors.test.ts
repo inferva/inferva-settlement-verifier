@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { buildVectors, EXAMPLE_PARAMS } from "../scripts/build-vectors.js";
+import { buildVectors } from "../scripts/build-vectors.js";
 import { runVerify, verifyChain } from "../src/index.js";
 import type { SettlementRecord } from "../src/types.js";
 
@@ -53,7 +53,7 @@ describe("golden vectors", () => {
   for (const file of chainFiles) {
     it(`${file} matches its expected result`, async () => {
       const v = load(file);
-      const r = await runVerify(v, file, { params: EXAMPLE_PARAMS });
+      const r = await runVerify(v, file);
       expect({ checked: r.checked, tip: r.tip, broken: r.broken }).toEqual({
         checked: v.expect.checked,
         tip: v.expect.tip,

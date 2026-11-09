@@ -11,7 +11,7 @@ import {
   verifyChain,
 } from "../src/index.js";
 import { main } from "../src/cli.js";
-import { buildChain, EXAMPLE_PARAMS } from "../scripts/build-vectors.js";
+import { buildChain, EXAMPLE_PARAMS, LEGACY_PARAMS } from "../scripts/build-vectors.js";
 import type { SettlementRecord } from "../src/types.js";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,6 +19,7 @@ import { join } from "node:path";
 
 const codes = (r: SettlementRecord) => checkRecord(r).map((v) => v.code);
 const pcodes = (r: SettlementRecord) => checkRecordWithParams(r, EXAMPLE_PARAMS).map((v) => v.code);
+const lcodes = (r: SettlementRecord) => checkRecordWithParams(r, LEGACY_PARAMS).map((v) => v.code);
 
 describe("payload and hash", () => {
   it("joins the twelve fields with | in SPEC order", () => {
@@ -81,11 +82,14 @@ describe("verifyChain", () => {
 });
 
 describe("invariants", () => {
-  it("a generated chain passes every check", async () => {
+  it("a generated chain passes every check under the parameters it was settled with", async () => {
     const { records } = await buildChain();
-    for (const r of records) {
-      expect(codes(r)).toEqual([]);
+    for (const r of records) expect(codes(r)).toEqual([]);
+    for (const r of records.slice(0, 5)) expect(lcodes(r)).toEqual([]);
+    for (const r of records.slice(5)) {
       expect(pcodes(r)).toEqual([]);
+      // Current records also fit the legacy discount and share rules (both allow 0); only the sponsor share differs.
+      expect(lcodes(r)).toEqual(["P2"]);
     }
   });
 
@@ -108,15 +112,29 @@ describe("invariants", () => {
     expect(codes(m({ base: 3, discount: 0, fee: 3, to_stakers: 1, to_sponsor: 1, to_treasury: 1 }))).toEqual(["B3"]);
   });
 
-  it("P1..P5 against a parameter set", async () => {
-    const base = (await buildChain()).records[2]!;
+  it("P1..P5 against the current parameters", async () => {
+    const base = (await buildChain()).records[5]!;
     const m = (patch: Partial<SettlementRecord>) => ({ ...base, ...patch }) as SettlementRecord;
+    expect(base.to_stakers).toBe(0);
+    expect(base.to_treasury).toBe(base.fee - base.to_sponsor);
     expect(pcodes(m({ fee: base.fee + 1, to_treasury: base.to_treasury + 1 }))).toContain("P1");
     expect(pcodes(m({ to_sponsor: base.to_sponsor - 1, to_treasury: base.to_treasury + 1 }))).toEqual(["P2"]);
-    expect(pcodes(m({ to_stakers: 0, to_treasury: base.to_treasury + base.to_stakers }))).toEqual([]);
-    expect(pcodes(m({ to_stakers: base.to_stakers - 1, to_treasury: base.to_treasury + 1 }))).toEqual(["P3"]);
-    expect(pcodes(m({ priority: 0 }))).toEqual(["P4"]);
+    expect(pcodes(m({ to_stakers: 1, to_treasury: base.to_treasury - 1 }))).toEqual(["P3"]);
+    expect(pcodes(m({ discount: 1 }))).toEqual(["P4"]);
+    expect(pcodes(m({ priority: 1 }))).toEqual(["P4"]);
     expect(pcodes(m({ epoch: base.epoch + 1 }))).toEqual(["P5"]);
+  });
+
+  it("P3 and P4 follow the legacy rules when legacy parameters are given", async () => {
+    const records = (await buildChain()).records;
+    const base = records[2]!;
+    const m = (patch: Partial<SettlementRecord>) => ({ ...base, ...patch }) as SettlementRecord;
+    expect(lcodes(m({ to_stakers: 0, to_treasury: base.to_treasury + base.to_stakers }))).toEqual([]);
+    expect(lcodes(m({ to_stakers: base.to_stakers - 1, to_treasury: base.to_treasury + 1 }))).toEqual(["P3"]);
+    expect(lcodes(m({ priority: 0 }))).toEqual(["P4"]);
+    // Legacy records checked against the current parameters are reported, not rejected.
+    expect(pcodes(base)).toEqual(["P2", "P3", "P4"]);
+    expect(codes(base)).toEqual([]);
   });
 });
 
@@ -147,6 +165,7 @@ describe("fetchChain", () => {
       "https://example.invalid/api/chain?after=0&limit=2",
       "https://example.invalid/api/chain?after=2&limit=2",
       "https://example.invalid/api/chain?after=4&limit=2",
+      "https://example.invalid/api/chain?after=6&limit=2",
     ]);
   });
 
@@ -174,6 +193,21 @@ describe("fetchChain", () => {
     const f = async () => ({ ok: true, status: 200, json: async () => ({ params: { ...EXAMPLE_PARAMS, other: 1 } }) });
     expect(await fetchParams("https://example.invalid", { fetch: f })).toEqual(EXAMPLE_PARAMS);
   });
+
+  it("fetchParams keeps the legacy parameters when the server still serves them", async () => {
+    const { legacy, ...rest } = LEGACY_PARAMS;
+    const f = async () => ({ ok: true, status: 200, json: async () => ({ params: { ...rest, ...legacy, other: 1 } }) });
+    expect(await fetchParams("https://example.invalid", { fetch: f })).toEqual(LEGACY_PARAMS);
+  });
+
+  it("fetchParams fails when a required parameter is missing", async () => {
+    const f = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ params: { fee_bps: 1000, epoch_seconds: 3600 } }),
+    });
+    await expect(fetchParams("https://example.invalid", { fetch: f })).rejects.toThrow(/sponsor_share_bps/);
+  });
 });
 
 describe("dump and CLI", () => {
@@ -194,13 +228,13 @@ describe("dump and CLI", () => {
     console.log = (s: string) => lines.push(s);
     try {
       expect(await main(["--file", good, "--json"])).toBe(0);
-      expect(JSON.parse(lines[0]!).checked).toBe(5);
+      expect(JSON.parse(lines[0]!).checked).toBe(7);
       expect(await main(["--file", bad])).toBe(1);
       expect(lines[1]).toMatch(/BROKEN at seq 1: hash does not match its contents/);
     } finally {
       console.log = log;
     }
-    expect(JSON.parse(readFileSync(good, "utf8")).records).toHaveLength(5);
+    expect(JSON.parse(readFileSync(good, "utf8")).records).toHaveLength(7);
   });
 
   it("exits 2 on an unknown flag", async () => {

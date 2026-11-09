@@ -11,7 +11,7 @@ The key words MUST, MUST NOT and SHOULD are used as in RFC 2119.
 
 ## 1. Units
 
-All amounts are integers in micro units of USDC: 1 USDC = 1,000,000. `tokens` is a plain count. `created_at` is a
+All amounts are integers in micro units of USDG: 1 USDG = 1,000,000. `tokens` is a plain count. `created_at` is a
 Unix timestamp in milliseconds. `epoch` is an integer epoch number (section 6.3, P5). Basis points (bps) are parts of
 10,000.
 
@@ -29,13 +29,13 @@ A record as returned by `GET /api/chain` has these fields. "Hashed" marks the fi
 | `model`             | string       | yes    | Model id                                                               |
 | `tokens`            | integer      | yes    | Tokens metered                                                         |
 | `base`              | integer      | yes    | Provider cost, repaid to the capacity sponsor                          |
-| `discount`          | integer      | yes    | Stake-tier discount on the provider cost                               |
+| `discount`          | integer      | yes    | Discount on the provider cost. `0` on current records (section 6.4)    |
 | `fee`               | integer      | yes    | Protocol fee                                                           |
-| `to_stakers`        | integer      | no     | Fee share to stakers                                                   |
+| `to_stakers`        | integer      | no     | Legacy fee share column. `0` on current records (section 6.4)          |
 | `to_sponsor`        | integer      | no     | Fee share to the capacity sponsor                                      |
-| `to_treasury`       | integer      | no     | Fee share to the treasury                                              |
+| `to_treasury`       | integer      | no     | Fee share to the treasury: the rest of the fee after `to_sponsor`      |
 | `capacity_id`       | string       | yes    | Sponsored capacity position the request drew on                        |
-| `priority`          | 0 or 1       | no     | Priority flag from the payer's stake tier                              |
+| `priority`          | 0 or 1       | no     | Legacy flag. `0` on current records (section 6.4)                      |
 | `epoch`             | integer      | yes    | Epoch the request belongs to                                           |
 | `prev_hash`         | 64 hex       | (link) | Hash of the previous record, or the genesis value for the first record |
 | `hash`              | 64 hex       | (out)  | This record's hash                                                     |
@@ -46,7 +46,11 @@ A record as returned by `GET /api/chain` has these fields. "Hashed" marks the fi
 The response can carry more columns (for example `latency_ms`, `stream`). They are not hashed and a verifier MUST
 ignore unknown fields.
 
-The agent pays `base - discount + fee`. The sponsor of the capacity position receives `base + to_sponsor`.
+The agent pays `base - discount + fee` (`base + fee` on current records, where `discount` is 0). The sponsor of the
+capacity position receives `base + to_sponsor`.
+
+`discount`, `to_stakers` and `priority` stay in the record so that every record, old or new, has the same shape and
+hashes the same way. `discount` is hashed, so it can never be dropped from the payload.
 
 ## 3. Payload
 
@@ -116,22 +120,19 @@ The app computes each record's amounts like this (integer arithmetic on safe int
 exact quotient):
 
 ```
-base      = ceil(tokens * price_per_1k / 1000)            // price_per_1k: the provider's effective price, not recorded
-discount  = floor(base * tier_discount_bps / 10000)       // 0 below Tier 1
-fee       = ceil(base * fee_bps / 10000)
-stakers   = floor(fee * staker_share_bps / 10000)
-sponsor   = floor(fee * sponsor_share_bps / 10000)
-treasury  = fee - stakers - sponsor
-
-to_stakers  = stakers if anything is staked when the request settles, else 0
-to_sponsor  = sponsor
-to_treasury = treasury + (stakers - to_stakers)            // the staker share goes to the treasury when nobody is staked
-priority    = 1 if the payer's tier is Tier 2 or Tier 3, else 0
+base        = ceil(tokens * price_per_1k / 1000)          // price_per_1k: the provider's effective price, not recorded
+discount    = 0
+fee         = ceil(base * fee_bps / 10000)
+to_sponsor  = floor(fee * sponsor_share_bps / 10000)
+to_treasury = fee - to_sponsor
+to_stakers  = 0
+priority    = 0
 tokens      = prompt_tokens + completion_tokens
 epoch       = floor(created_at / 1000 / epoch_seconds)
 ```
 
-So the discount and the shares round down, the fee rounds up, and the treasury takes the remainder of the fee.
+So the fee rounds up, the sponsor share rounds down, and the treasury takes the remainder of the fee. Records
+settled under the earlier fee schedule follow section 6.4.
 
 The split fields, `priority`, `prompt_tokens` and `completion_tokens` are not part of the hash. The checks in this
 section are consistency checks. They are not tamper evidence for those fields.
@@ -141,18 +142,18 @@ section are consistency checks. They are not tamper evidence for those fields.
 These hold for every record whatever the parameters were.
 
 - **I1** `tokens`, `base`, `discount`, `fee`, `to_stakers`, `to_sponsor`, `to_treasury`, `epoch`, `created_at` are
-  non-negative integers. (`to_treasury >= 0` because governance keeps `staker_share_bps + sponsor_share_bps <= 10000`,
-  checked when a proposal is made and again when it executes.)
-- **I2** `to_stakers + to_sponsor + to_treasury = fee`, exactly.
+  non-negative integers. (`to_treasury >= 0` because governance keeps `sponsor_share_bps <= 10000`.)
+- **I2** `to_stakers + to_sponsor + to_treasury = fee`, exactly. (`to_stakers` is 0 on current records and stays in
+  the sum so older records still balance.)
 - **I3** `priority` is `0` or `1`.
 - **I4** When both `prompt_tokens` and `completion_tokens` are non-null, `prompt_tokens + completion_tokens = tokens`.
 
 ### 6.2 Within the v1 governance bounds (severity: warning)
 
-v1 governance only accepts `fee_bps` from 1 to 5000 and each tier discount from 0 to 5000 bps. Parameters set
-outside governance are not covered, so these are reported as warnings.
+v1 governance only accepts `fee_bps` from 1 to 5000 (and, under the earlier fee schedule, discounts from 0 to 5000
+bps). Parameters set outside governance are not covered, so these are reported as warnings.
 
-- **B1** `2 * discount <= base` (the discount is at most half the provider cost).
+- **B1** `2 * discount <= base` (the discount is at most half the provider cost; trivially true when it is 0).
 - **B2** `fee >= 1` when `base >= 1`, and `fee = 0` when `base = 0` (the fee rounds up and `fee_bps >= 1`).
 - **B3** `2 * fee <= base + 1` (the fee is at most `ceil(base / 2)`).
 
@@ -164,10 +165,34 @@ simply mean the parameters changed since.
 
 - **P1** `fee = ceil(base * fee_bps / 10000)`.
 - **P2** `to_sponsor = floor(fee * sponsor_share_bps / 10000)`.
+- **P3** `to_stakers = 0` (so `to_treasury = fee - to_sponsor`).
+- **P4** `discount = 0` and `priority = 0`.
+- **P5** `epoch = floor(created_at / 1000 / epoch_seconds)`.
+
+When the parameter set also carries the legacy parameters of section 6.4, P3 and P4 follow that section instead.
+
+### 6.4 Records settled under the earlier fee schedule
+
+Records written before the fee schedule was simplified can carry a non-zero `discount`, `to_stakers` or
+`priority`. They hash exactly like current records and verify the same way. Their amounts were computed with four
+more parameters, `staker_share_bps`, `tier1_discount_bps`, `tier2_discount_bps` and `tier3_discount_bps`, that a
+parameter set from that time also carries:
+
+```
+discount    = floor(base * d / 10000)                      // d: 0, tier1_discount_bps, tier2_discount_bps or tier3_discount_bps
+share       = floor(fee * staker_share_bps / 10000)
+to_stakers  = share, or 0 when the share was not paid out
+to_treasury = fee - to_sponsor - to_stakers
+priority    = 1 when d was tier2_discount_bps or tier3_discount_bps, else 0
+```
+
+Under such a parameter set:
+
 - **P3** `to_stakers` is `floor(fee * staker_share_bps / 10000)` or `0`.
 - **P4** `discount = floor(base * d / 10000)` where `d` is `0` or `tier1_discount_bps` when `priority = 0`, and
   `tier2_discount_bps` or `tier3_discount_bps` when `priority = 1`.
-- **P5** `epoch = floor(created_at / 1000 / epoch_seconds)`.
+
+A current record (discount, `to_stakers` and `priority` all 0) also passes these two checks.
 
 ## 7. Downloading the log
 
@@ -200,7 +225,7 @@ It does not show:
 
 - that the log was not rewritten as a whole. Whoever controls the log can edit a record and recompute every hash
   after it. That changes the tip, so it is caught only by comparing against a hash recorded somewhere else: a tip you
-  saved, receipts you hold, or (planned, not live) the tip anchored onchain each epoch on Elysium.
+  saved, receipts you hold, or (planned, not live) the tip anchored onchain each epoch on Robinhood Chain.
 - that the newest records, after the last hash you saved, were not dropped.
 - that the fields not in the hash (section 2) are untouched. Section 6 only checks that they are consistent.
 - that the amounts were fair, that the provider served what was billed, or that balances match the log.
@@ -208,3 +233,6 @@ It does not show:
 ## 9. Changes
 
 - v1 (2026-11-09): first version.
+- v1, revised 2026-11-09: amounts are in USDG. The fee is split between the capacity sponsor and the treasury;
+  `discount`, `to_stakers` and `priority` are 0 on current records and keep their place in the record and, for
+  `discount`, in the payload. The earlier fee schedule moved to section 6.4. The payload and hash are unchanged.

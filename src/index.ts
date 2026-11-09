@@ -8,6 +8,7 @@ export type {
   ChainDump,
   FeeParams,
   HashedFields,
+  LegacyFeeParams,
   SettlementRecord,
   Severity,
   VerifyResult,
